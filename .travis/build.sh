@@ -21,7 +21,7 @@ if ! python -c 'import caffe2'; then
     git checkout "$CAFFE2_VERSION" && git submodule update --init
 
     ccache -z
-    mkdir build && cd build && cmake -DPYTHON_LIBRARY=$(python-config --prefix)/lib/libpython2.7.so -DCMAKE_INSTALL_PREFIX:PATH=$c2_install_dir .. && make -j16 &&  make install
+    mkdir build && cd build && cmake -DCMAKE_INSTALL_PREFIX:PATH=$c2_install_dir .. && make -j16 &&  make install
     ccache -s
 fi
 
