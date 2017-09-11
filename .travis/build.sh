@@ -14,7 +14,7 @@ c2_install_dir="$build_cache_dir/caffe2/$CAFFE2_VERSION"
 # install
 export PYTHONPATH=$c2_install_dir
 export LD_LIBRARY_PATH=$c2_install_dir/lib
-pip install numpy future enum
+pip install numpy future
 if ! python -c 'import caffe2'; then
     rm -rf $c2_install_dir
     git clone https://github.com/caffe2/caffe2.git $c2_dir && cd $c2_dir
