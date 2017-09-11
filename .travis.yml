@@ -20,7 +20,5 @@ cache:
 env:
   global:
     - PB_VERSION=2.6.1
-
-matrix:
-  include:
-  - env: CAFFE2_VERSION=6beec50
+  CAFFE2_VERSION:
+    - 6beec50
