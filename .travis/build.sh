@@ -20,7 +20,7 @@ elif [[ $TRAVIS_PYTHON_VERSION == 3.* ]]; then
 else
     die "Unknown Python version: $TRAVIS_PYTHON_VERSION"
 fi
-[[ ! -e "$libpython" ]] || die "Could not find libpython"
+[[ -e "$libpython" ]] || die "Could not find libpython"
 
 # install
 export PYTHONPATH=$c2_install_dir
