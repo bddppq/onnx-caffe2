@@ -26,8 +26,8 @@ fi
 export PYTHONPATH=$c2_install_dir
 export LD_LIBRARY_PATH=$c2_install_dir/lib
 pip install numpy future
-ldd $c2_install_dir/python/caffe2_pybind11_state.so
-readelf -d $c2_install_dir/python/caffe2_pybind11_state.so
+ldd $c2_install_dir/caffe2/python/caffe2_pybind11_state.so
+readelf -d $c2_install_dir/caffe2/python/caffe2_pybind11_state.so
 if ! python -c 'import caffe2'; then
     rm -rf $c2_install_dir
     git clone https://github.com/caffe2/caffe2.git $c2_dir && cd $c2_dir
