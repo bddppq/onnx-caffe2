@@ -33,7 +33,14 @@ if ! python -c 'import caffe2'; then
     git checkout "$CAFFE2_VERSION" && git submodule update --init
 
     ccache -z
-    mkdir build && cd build && cmake -DPYTHON_INCLUDE_DIR="$(python -c 'from distutils import sysconfig; print(sysconfig.get_python_inc())')" -DPYTHON_LIBRARY="$libpython" -DCMAKE_INSTALL_PREFIX:PATH="$c2_install_dir" .. && VERBOSE=1 make -j16 &&  make install
+    mkdir build && cd build
+    cmake \
+        -DPYTHON_INCLUDE_DIR="$(python -c 'from distutils import sysconfig; print(sysconfig.get_python_inc())')" \
+        -DPYTHON_LIBRARY="$libpython" \
+        -DCMAKE_INSTALL_PREFIX:PATH="$c2_install_dir" \
+        ..
+    VERBOSE=1 make -j16
+    make install
     ccache -s
 fi
 
