@@ -11,6 +11,16 @@ pip install $onnx_c2_dir
 # setup caffe2
 c2_dir="$workdir/caffe2"
 c2_install_dir="$build_cache_dir/caffe2/$CAFFE2_VERSION"
+
+
+echo "magic begin"
+
+find $(python-config --prefix)/lib
+
+echo "magic end"
+
+
+
 # install
 export PYTHONPATH=$c2_install_dir
 export LD_LIBRARY_PATH=$c2_install_dir/lib
