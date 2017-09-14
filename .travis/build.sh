@@ -33,7 +33,7 @@ if ! python -c 'import caffe2'; then
     git checkout "$CAFFE2_VERSION" && git submodule update --init
 
     ccache -z
-    mkdir build && cd build && cmake -DPYTHON_LIBRARY="$libpython" -DCMAKE_INSTALL_PREFIX:PATH="$c2_install_dir" .. && make -j16 &&  make install
+    mkdir build && cd build && cmake -DPYTHON_INCLUDE_DIRS="$(python-config --includes)" -DPYTHON_LIBRARY="$libpython" -DCMAKE_INSTALL_PREFIX:PATH="$c2_install_dir" .. && make -j16 &&  make install
     ccache -s
 fi
 
@@ -45,4 +45,4 @@ pip install pytest-cov
 
 # run caffe2 tests
 cd "$workdir"
-python "$onnx_c2_dir/tests/caffe2_ref_test.py"
+pytest "$onnx_c2_dir/tests/caffe2_ref_test.py"
