@@ -13,13 +13,14 @@ c2_dir="$workdir/caffe2"
 c2_install_dir="$build_cache_dir/caffe2/$CAFFE2_VERSION"
 
 
-echo "magic begin"
-
-find $(python-config --prefix)/lib
-
-echo "magic end"
-
-
+if [[ $TRAVIS_PYTHON_VERSION == 2.* ]]; then
+    libpython=$(python-config --prefix)/lib/libpython"$TRAVIS_PYTHON_VERSION".so
+elif [[ $TRAVIS_PYTHON_VERSION == 3.* ]]; then
+    libpython=$(python-config --prefix)/lib/libpython"$TRAVIS_PYTHON_VERSION"m.so
+else
+    die "Unknown Python version: $TRAVIS_PYTHON_VERSION"
+fi
+[[ ! -e "$libpython" ]] || die "Could not find libpython"
 
 # install
 export PYTHONPATH=$c2_install_dir
@@ -31,7 +32,7 @@ if ! python -c 'import caffe2'; then
     git checkout "$CAFFE2_VERSION" && git submodule update --init
 
     ccache -z
-    mkdir build && cd build && cmake -DPYTHON_LIBRARY=$(python-config --prefix)/lib/"libpython$TRAVIS_PYTHON_VERSION.so" -DCMAKE_INSTALL_PREFIX:PATH=$c2_install_dir .. && make -j16 &&  make install
+    mkdir build && cd build && cmake -DPYTHON_LIBRARY=$libpython -DCMAKE_INSTALL_PREFIX:PATH=$c2_install_dir .. && make -j16 &&  make install
     ccache -s
 fi
 
