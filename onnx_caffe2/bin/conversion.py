@@ -3,14 +3,18 @@ from __future__ import division
 from __future__ import print_function
 
 import json
+import logging
 
 from caffe2.proto import caffe2_pb2
 import click
 import numpy as np
-from onnx import checker, onnx_pb2
+from onnx import checker, onnx_pb2, defs
 
 from onnx_caffe2.backend import Caffe2Backend as c2
 import onnx_caffe2.frontend as c2_onnx
+
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 
 @click.command(
@@ -59,6 +63,13 @@ def caffe2_to_onnx(caffe2_net,
         predict_net=c2_net_proto,
         init_net=c2_init_net_proto,
         value_info=value_info)
+
+    for node in onnx_model.graph.node:
+        schema = defs.get_schema(node.op_type)
+        if schema.support_level == defs.OpSchema.SupportType.EXPERIMENTAL:
+            logger.warning(
+                'The converted onnx model contains '
+                'experimental operators "{}"'.format(node.op_type))
 
     output.write(onnx_model.SerializeToString())
 
