@@ -106,6 +106,7 @@ class Caffe2Backend(Backend):
         'GlobalAveragePool':    'AveragePool',
         'Pad':                  'PadImage',
         'Neg':                  'Negative',
+        'BatchNormalization':   'SpatialBN',
     }
 
     _global_renamed_attrs = {'kernel_shape': 'kernels'}

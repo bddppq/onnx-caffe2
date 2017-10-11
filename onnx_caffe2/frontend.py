@@ -29,6 +29,22 @@ _blacklist_caffe2_args = {'order', 'global_pooling',
 # expected argument values
 _expected_arg_values = {'order': [b'NCHW'], 'global_pooling': [1]}
 
+_renamed_operators = {
+    'SpatialBN': 'BatchNormalization',
+    'Conv1D': 'Conv',
+    'Conv2D': 'Conv',
+    'Conv3D': 'Conv',
+    'ConvTranspose1D': 'ConvTranspose',
+    'ConvTranspose2D': 'ConvTranspose',
+    'ConvTranspose3D': 'ConvTranspose',
+    'MaxPool1D': 'MaxPool',
+    'MaxPool2D': 'MaxPool',
+    'MaxPool3D': 'MaxPool',
+    'AveragePool1D': 'AveragePool',
+    'AveragePool2D': 'AveragePool',
+    'AveragePool3D': 'AveragePool',
+}
+
 _renamed_args = {
     'Squeeze': {'dims': 'axes'},
     'Transpose': {'axes': 'perm'},
@@ -149,21 +165,12 @@ def get_onnx_attrs(op_type, op_def):
 
 
 def get_node_op_type(op_def):
-    op_type = op_def.type
+    op_type = _renamed_operators.get(op_def.type, op_def.type)
 
-    matched = re.match(r'^(Conv|ConvTranspose)(\dD)?$', op_type)
-    if matched:
-        op_type = matched.group(1)
-
-    matched = re.match(r'^(MaxPool|AveragePool)(\dD)?$', op_type)
-    if matched:
-        is_global = False
+    if op_type in ['MaxPool', 'AveragePool']:
         for arg in op_def.arg:
             if arg.name == 'global_pooling' and arg.i:
-                is_global = True
-                break
-        op_type = ('Global' if is_global else '') + matched.group(1)
-
+                return 'Global' + op_type
     return op_type
 
 
