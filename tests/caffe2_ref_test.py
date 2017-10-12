@@ -14,7 +14,7 @@ import onnx
 from onnx.helper import make_node, make_graph, make_tensor, make_tensor_value_info
 from onnx_caffe2.helper import make_model, c2_native_run_net
 
-from onnx import onnx_pb2
+from onnx import onnx_pb2, defs
 import onnx_caffe2.frontend as c2_onnx
 import onnx_caffe2.backend as c2
 
