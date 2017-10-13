@@ -202,7 +202,8 @@ class TestCaffe2End2End(TestCase):
         n, c, h, w = input_blob_dims
         data = np.random.randn(n, c, h, w).astype(np.float32)
         inputs = [data]
-        c2_outputs = c2_native_run_net(c2_init_net, c2_predict_net, inputs)
+        _, c2_outputs = c2_native_run_net(c2_init_net, c2_predict_net, inputs)
+        del _
 
         model = c2_onnx.caffe2_net_to_onnx_model(
             predict_net=c2_predict_net,

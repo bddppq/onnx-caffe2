@@ -8,6 +8,7 @@ from __future__ import division
 from __future__ import print_function
 from __future__ import unicode_literals
 
+import itertools
 import collections
 import logging
 
@@ -61,11 +62,12 @@ class Caffe2Frontend(object):
     _special_operators = {
         'Conv': '_create_conv_pool_op',
         'ConvTranspose': '_create_conv_pool_op',
-        'ChannelShuffle': '_create_conv_pool_op',
+        'ChannelShuffle': '_create_channel_shuffle',
         'MaxPool': '_create_conv_pool_op',
         'AveragePool': '_create_conv_pool_op',
         'Concat': '_create_concat',
         'FC': '_create_gemm',
+        'LRN': '_create_lrn',
     }
 
     @classmethod
@@ -109,7 +111,7 @@ class Caffe2Frontend(object):
         return cls._common_caffe2_arg_to_onnx_attr(op_def, arg)
 
     @classmethod
-    def _common_caffe2_op_to_onnx_node(cls, op_def):
+    def _common_caffe2_op_to_onnx_node(cls, op_def, shapes):
         node_def = NodeProto()
         node_def.name = op_def.name
 
@@ -125,15 +127,15 @@ class Caffe2Frontend(object):
         return node_def
 
     @classmethod
-    def _create_concat(cls, op_def):
-        node = cls._common_caffe2_op_to_onnx_node(op_def)
+    def _create_concat(cls, op_def, shapes):
+        node = cls._common_caffe2_op_to_onnx_node(op_def, shapes)
         if len(node.output) == 2:
             del node.output[1]
         return node
 
     @classmethod
-    def _create_conv_pool_op(cls, op_def):
-        node = cls._common_caffe2_op_to_onnx_node(op_def)
+    def _create_conv_pool_op(cls, op_def, shapes):
+        node = cls._common_caffe2_op_to_onnx_node(op_def, shapes)
 
         if node.op_type in ['MaxPool', 'AveragePool']:
             for i, attr in enumerate(node.attribute):
@@ -187,7 +189,7 @@ class Caffe2Frontend(object):
         return node
 
     @classmethod
-    def _create_gemm(cls, op_def):
+    def _create_gemm(cls, op_def, shapes):
         x, w, b = op_def.input
         args = {arg.name: arg for arg in op_def.arg}
         y, = op_def.output
@@ -227,12 +229,80 @@ class Caffe2Frontend(object):
         return nodes
 
     @classmethod
-    def caffe2_op_to_onnx_node(cls, op_def):
+    def _create_lrn(cls, op_def, shapes):
+        node = cls._common_caffe2_op_to_onnx_node(op_def, shapes)
+        if len(node.output) == 2:
+            del node.output[1]
+
+        nodes = [node]
+        attrs = {attr.name: attr for attr in node.attribute}
+        if 'bias' in attrs:
+            bias = attrs.pop('bias').i
+            del node.attribute[:]
+            node.attribute.extend(attrs.values())
+
+            output, = node.output
+            bias_tensor = dummy_name()
+            nodes.append(helper.make_node(
+                'Constant',
+                inputs=[],
+                outputs=[bias_tensor],
+                value=helper.make_tensor(
+                    bias_tensor,
+                    TensorProto.FLOAT,
+                    dims=(1,),
+                    vals=[bias]),
+            ))
+            nodes.append(helper.make_node(
+                'Add',
+                inputs=[output, bias_tensor],
+                outputs=[output],
+                broadcast=1,
+            ))
+        return nodes
+
+    @classmethod
+    def _create_channel_shuffle(cls, op_def, shapes):
+        x, = op_def.input
+        y, = op_def.output
+        n, c, h, w = shapes[x]
+        args = {arg.name: arg for arg in op_def.arg}
+        g = args['group'].i
+        assert c % g == 0
+
+        nodes = []
+
+        tmp1 = dummy_name()
+        nodes.append(helper.make_node(
+            'Reshape',
+            inputs=[x],
+            outputs=[tmp1],
+            shape=[n, g, c // g, h, w],
+        ))
+
+        tmp2 = dummy_name()
+        nodes.append(helper.make_node(
+            'Transpose',
+            inputs=[tmp1],
+            outputs=[tmp2],
+            perm=[0, 2, 1, 3, 4],
+        ))
+
+        nodes.append(helper.make_node(
+            'Reshape',
+            inputs=[tmp2],
+            outputs=[y],
+            shape=[n, c, h, w],
+        ))
+        return nodes
+
+    @classmethod
+    def caffe2_op_to_onnx_node(cls, op_def, shapes):
         if op_def.type in cls._special_operators:
             translator = getattr(cls, cls._special_operators[op_def.type])
         else:
             translator = cls._common_caffe2_op_to_onnx_node
-        nodes = translator(op_def)
+        nodes = translator(op_def, shapes)
         if not isinstance(nodes, collections.Iterable):
             nodes = [nodes]
         return nodes
@@ -261,27 +331,22 @@ class Caffe2Frontend(object):
             raise RuntimeError('Could not find value info of inputs: {}'.format(
                 ', '.join(missing)))
 
-        # If there are missing type shape info of output,
-        # run the net once to find out!
-        missing = (set(list(predict_net.external_output)) -
-                   set(value_info.keys()))
-        if missing:
-            inputs = {}
-            for name in predict_net.external_input:
-                elem_type, shape = value_info[name]
-                inputs[name] = np.random.randn(*shape).astype(
-                    mapping.TENSOR_TYPE_TO_NP_TYPE[elem_type])
+        inputs = {}
+        for name in predict_net.external_input:
+            elem_type, shape = value_info[name]
+            inputs[name] = np.random.randn(*shape).astype(
+                mapping.TENSOR_TYPE_TO_NP_TYPE[elem_type])
 
-            outputs = c2_native_run_net(
-                init_net,
-                predict_net,
-                inputs)
+        ws, outputs = c2_native_run_net(
+            init_net,
+            predict_net,
+            inputs)
 
-            for name in missing:
-                output = outputs[name]
-                elem_type = mapping.NP_TYPE_TO_TENSOR_TYPE[output.dtype]
-                shape = output.shape
-                value_info[name] = (elem_type, shape)
+        for name in predict_net.external_output:
+            output = outputs[name]
+            elem_type = mapping.NP_TYPE_TO_TENSOR_TYPE[output.dtype]
+            shape = output.shape
+            value_info[name] = (elem_type, shape)
 
         graph_def = GraphProto()
         graph_def.name = predict_net.name
@@ -295,7 +360,14 @@ class Caffe2Frontend(object):
             for name in predict_net.external_input)
 
         for op in predict_net.op:
-            graph_def.node.extend(cls.caffe2_op_to_onnx_node(op))
+            shapes = {}
+            for name in itertools.chain(op.input, op.output):
+                blob = ws.FetchBlob(name)
+                if hasattr(blob, 'shape'):
+                    shapes[name] = blob.shape
+            graph_def.node.extend(
+                cls.caffe2_op_to_onnx_node(
+                    op, shapes=shapes))
 
         all_output = set(sum((list(node.output) for node in graph_def.node),
                              [init.name for init in graph_def.initializer]))
