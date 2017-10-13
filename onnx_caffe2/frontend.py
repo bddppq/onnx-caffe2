@@ -197,23 +197,29 @@ class Caffe2Frontend(object):
         nodes = []
         if 'axis' in args:
             axis = args['axis'].i
+            x_shape = shapes[x]
+            outer = np.prod(x_shape[:axis]).astype(int)
+            inner = np.prod(x_shape[axis:]).astype(int)
             reshaped_x = dummy_name()
             nodes.append(helper.make_node(
-                'Flatten',
+                'Reshape',
                 inputs=[x],
                 outputs=[reshaped_x],
-                axis=axis,
+                shape=[outer, inner],
             ))
             x = reshaped_x
 
         if 'axis_w' in args:
             axis_w = args['axis_w'].i
+            w_shape = shapes[w]
+            outer = np.prod(w_shape[:axis_w]).astype(int)
+            inner = np.prod(w_shape[axis_w:]).astype(int)
             reshaped_w = dummy_name()
             nodes.append(helper.make_node(
-                'Flatten',
+                'Reshape',
                 inputs=[w],
                 outputs=[reshaped_w],
-                axis=axis_w,
+                shape=[outer, inner],
             ))
             w = reshaped_w
 
@@ -226,6 +232,16 @@ class Caffe2Frontend(object):
             broadcast=1,
         ))
 
+        if 'axis' in args:
+            axis = args['axis'].i
+            x_shape = shapes[x]
+            nodes.append(helper.make_node(
+                'Reshape',
+                inputs=[y],
+                outputs=[y],
+                shape=x_shape[:axis] + [-1],
+            ))
+
         return nodes
 
     @classmethod
@@ -233,33 +249,7 @@ class Caffe2Frontend(object):
         node = cls._common_caffe2_op_to_onnx_node(op_def, shapes)
         if len(node.output) == 2:
             del node.output[1]
-
-        nodes = [node]
-        attrs = {attr.name: attr for attr in node.attribute}
-        if 'bias' in attrs:
-            bias = attrs.pop('bias').i
-            del node.attribute[:]
-            node.attribute.extend(attrs.values())
-
-            output, = node.output
-            bias_tensor = dummy_name()
-            nodes.append(helper.make_node(
-                'Constant',
-                inputs=[],
-                outputs=[bias_tensor],
-                value=helper.make_tensor(
-                    bias_tensor,
-                    TensorProto.FLOAT,
-                    dims=(1,),
-                    vals=[bias]),
-            ))
-            nodes.append(helper.make_node(
-                'Add',
-                inputs=[output, bias_tensor],
-                outputs=[output],
-                broadcast=1,
-            ))
-        return nodes
+        return node
 
     @classmethod
     def _create_channel_shuffle(cls, op_def, shapes):
